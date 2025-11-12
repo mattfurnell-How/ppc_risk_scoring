@@ -22,7 +22,7 @@ def run_risk_scoring(leads_file, branches_file):
             response = requests.get(url)
             if response.status_code == 200:
                 result = response.json()["result"]
-                return result["latitude"], result["longitude"]
+                return result["latitude"], result["longtitude"]
         except:
             return None, None
         return None, None
@@ -38,7 +38,7 @@ def run_risk_scoring(leads_file, branches_file):
         if isinstance(postcode, str) and postcode:
             lat, lon = get_coords(postcode)
             leads_df.at[i, "Latitude"] = lat
-            leads_df.at[i, "Longitude"] = lon
+            leads_df.at[i, "Longtitude"] = lon
             time.sleep(0.1)
         step += 1
         progress_bar.progress(int((step / total_steps) * 100))
@@ -46,7 +46,7 @@ def run_risk_scoring(leads_file, branches_file):
     # Nearest branch
     for i, lead in leads_df.iterrows():
         lead_lat = lead["Latitude"]
-        lead_lon = lead["Longitude"]
+        lead_lon = lead["Longtitude"]
 
         if pd.isna(lead_lat) or pd.isna(lead_lon):
             leads_df.at[i, "Nearest Branch"] = "N/A"
@@ -58,7 +58,7 @@ def run_risk_scoring(leads_file, branches_file):
         nearest_branch = None
 
         for _, branch in branches_df.iterrows():
-            branch_location = (branch["Latitude"], branch["Longitude"])
+            branch_location = (branch["Latitude"], branch["Longtitude"])
             if pd.isna(branch_location[0]) or pd.isna(branch_location[1]):
                 continue
             distance = geodesic(lead_location, branch_location).miles
