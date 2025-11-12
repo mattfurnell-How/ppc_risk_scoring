@@ -3,17 +3,23 @@ import requests
 import time
 from geopy.distance import geodesic
 import streamlit as st
+from io import BytesIO
 
 # ------------------- CORE LOGIC ------------------- #
 def run_risk_scoring(leads_file, branches_file):
     leads_df = pd.read_excel(leads_file)
     branches_df = pd.read_excel(branches_file)
 
-    leads_df["Latitude"] = None
-    leads_df["Longtitude"] = None
+    # Always use "Longtitude" (keep existing if present)
+    if "Latitude" not in leads_df.columns:
+        leads_df["Latitude"] = None
+    if "Longtitude" not in leads_df.columns:
+        leads_df["Longtitude"] = None
+
     leads_df["Nearest Branch"] = None
     leads_df["Distance to Nearest Branch (miles)"] = None
 
+    # postcode -> coords
     def get_coords(postcode):
         if not isinstance(postcode, str) or not postcode:
             return None, None
@@ -22,7 +28,7 @@ def run_risk_scoring(leads_file, branches_file):
             response = requests.get(url)
             if response.status_code == 200:
                 result = response.json()["result"]
-                return result["latitude"], result["longtitude"]
+                return result["latitude"], result["longitude"]
         except:
             return None, None
         return None, None
@@ -38,7 +44,7 @@ def run_risk_scoring(leads_file, branches_file):
         if isinstance(postcode, str) and postcode:
             lat, lon = get_coords(postcode)
             leads_df.at[i, "Latitude"] = lat
-            leads_df.at[i, "Longtitude"] = lon
+            leads_df.at[i, "Longtitude"] = lon  # ✅ Always use Longtitude
             time.sleep(0.1)
         step += 1
         progress_bar.progress(int((step / total_steps) * 100))
@@ -46,7 +52,7 @@ def run_risk_scoring(leads_file, branches_file):
     # Nearest branch
     for i, lead in leads_df.iterrows():
         lead_lat = lead["Latitude"]
-        lead_lon = lead["Longtitude"]
+        lead_lon = lead["Longtitude"]  # ✅ Always use Longtitude
 
         if pd.isna(lead_lat) or pd.isna(lead_lon):
             leads_df.at[i, "Nearest Branch"] = "N/A"
@@ -58,9 +64,17 @@ def run_risk_scoring(leads_file, branches_file):
         nearest_branch = None
 
         for _, branch in branches_df.iterrows():
-            branch_location = (branch["Latitude"], branch["Longtitude"])
+            # ✅ Handle Longtitude for branches too
+            if "Longtitude" in branch:
+                branch_location = (branch["Latitude"], branch["Longtitude"])
+            elif "Longitude" in branch:  # fallback just in case
+                branch_location = (branch["Latitude"], branch["Longitude"])
+            else:
+                continue
+
             if pd.isna(branch_location[0]) or pd.isna(branch_location[1]):
                 continue
+
             distance = geodesic(lead_location, branch_location).miles
             if distance < min_distance:
                 min_distance = distance
@@ -68,11 +82,10 @@ def run_risk_scoring(leads_file, branches_file):
 
         leads_df.at[i, "Nearest Branch"] = nearest_branch
         leads_df.at[i, "Distance to Nearest Branch (miles)"] = round(min_distance, 2)
-
         step += 1
         progress_bar.progress(int((step / total_steps) * 100))
 
-    # Risk calculations (same as before)
+    # Risk scoring functions
     def calculate_ncd_score(years):
         if years == "N/A" or pd.isna(years): return False
         try:
@@ -166,20 +179,19 @@ def run_risk_scoring(leads_file, branches_file):
     st.success("✅ Risk Scoring Complete!")
     st.metric(
         "Risk Score Average",
-    round(leads_df["RiskScore"].replace("FALSE", pd.NA).dropna().astype(float).mean(), 2)
-)
+        round(leads_df["RiskScore"].replace("FALSE", pd.NA).dropna().astype(float).mean(), 2)
+    )
 
-    from io import BytesIO
+    # Download button
     buffer = BytesIO()
     leads_df.to_excel(buffer, index=False, engine='openpyxl')
     buffer.seek(0)
-
     st.download_button(
-    label="Download Results Excel",
-    data=buffer,
-    file_name="Risk_Scoring_Results.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+        label="Download Results Excel",
+        data=buffer,
+        file_name="Risk_Scoring_Results.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 
 # ------------------- STREAMLIT UI ------------------- #
@@ -198,3 +210,4 @@ if leads_file and branches_file:
         run_risk_scoring(leads_file, branches_file)
 else:
     st.info("Please upload both Client Data and Branch Data to begin.")
+
