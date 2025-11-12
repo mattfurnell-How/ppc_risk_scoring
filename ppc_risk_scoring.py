@@ -10,7 +10,7 @@ def run_risk_scoring(leads_file, branches_file):
     branches_df = pd.read_excel(branches_file)
 
     leads_df["Latitude"] = None
-    leads_df["Longitude"] = None
+    leads_df["Longtitude"] = None
     leads_df["Nearest Branch"] = None
     leads_df["Distance to Nearest Branch (miles)"] = None
 
